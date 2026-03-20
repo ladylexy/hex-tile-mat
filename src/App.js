@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 
 // True honeycomb tessellation:
 // Flat-top hexagons, column-offset grid.

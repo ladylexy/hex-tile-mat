@@ -75,28 +75,37 @@ export default function HexTileMat() {
     return acc;
   }, {});
 
-  const handleTileInteract = useCallback((id, forceErase) => {
+  const handleMouseDown = (id) => {
+    setIsDrawing(true);
+    const current = tileColors[id];
+    // If clicking a tile that already has the selected color, enter erase mode
+    const shouldErase = current === selectedColor;
+    setEraseMode(shouldErase);
     setTileColors(prev => {
-      const current = prev[id];
-      if (forceErase || current === selectedColor) {
+      if (shouldErase) {
         const next = { ...prev };
         delete next[id];
         return next;
       }
       return { ...prev, [id]: selectedColor };
     });
-  }, [selectedColor]);
-
-  const handleMouseDown = (id) => {
-    setIsDrawing(true);
-    const isColored = tileColors[id];
-    setEraseMode(isColored === selectedColor || (isColored && !isColored));
-    handleTileInteract(id, isColored === selectedColor);
   };
 
   const handleMouseEnter = (id) => {
     if (!isDrawing) return;
-    handleTileInteract(id, eraseMode);
+    setTileColors(prev => {
+      if (eraseMode) {
+        // In erase mode: only remove tiles that match the selected color
+        if (prev[id] === selectedColor) {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        }
+        return prev;
+      }
+      // In paint mode: always paint (replace any color, never remove)
+      return { ...prev, [id]: selectedColor };
+    });
   };
 
   const reset = () => setTileColors({});

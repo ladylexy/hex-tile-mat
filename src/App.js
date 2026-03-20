@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 
 // True honeycomb tessellation:
 // Flat-top hexagons, column-offset grid.
@@ -75,7 +75,7 @@ export default function HexTileMat() {
     return acc;
   }, {});
 
-  const handleMouseDown = (id) => {
+  const handleMouseDown = useCallback((id) => {
     setIsDrawing(true);
     const current = tileColors[id];
     // If clicking a tile that already has the selected color, enter erase mode
@@ -89,9 +89,9 @@ export default function HexTileMat() {
       }
       return { ...prev, [id]: selectedColor };
     });
-  };
+  }, [selectedColor, tileColors]);
 
-  const handleMouseEnter = (id) => {
+  const handleMouseEnter = useCallback((id) => {
     if (!isDrawing) return;
     setTileColors(prev => {
       if (eraseMode) {
@@ -106,9 +106,49 @@ export default function HexTileMat() {
       // In paint mode: always paint (replace any color, never remove)
       return { ...prev, [id]: selectedColor };
     });
-  };
+  }, [isDrawing, eraseMode, selectedColor]);
 
   const reset = () => setTileColors({});
+
+  // Touch support
+  const svgRef = useRef(null);
+
+  const getTileFromPoint = useCallback((clientX, clientY) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = SVG_WIDTH / rect.width;
+    const scaleY = SVG_HEIGHT / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    // Find closest hex center within a reasonable radius
+    let closest = null;
+    let closestDist = Infinity;
+    for (const cell of GRID) {
+      const dx = cell.cx - x;
+      const dy = cell.cy - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist && dist < HEX_R * 1.2) {
+        closestDist = dist;
+        closest = cell.id;
+      }
+    }
+    return closest;
+  }, []);
+
+  const handleTouchStart = useCallback((e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const id = getTileFromPoint(touch.clientX, touch.clientY);
+    if (id) handleMouseDown(id);
+  }, [getTileFromPoint, handleMouseDown]);
+
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const id = getTileFromPoint(touch.clientX, touch.clientY);
+    if (id) handleMouseEnter(id);
+  }, [getTileFromPoint, handleMouseEnter]);
 
   return (
     <div
@@ -120,10 +160,11 @@ export default function HexTileMat() {
         alignItems: "center",
         justifyContent: "center",
         fontFamily: "'Courier New', monospace",
-        padding: "24px",
+        padding: "16px 12px",
         userSelect: "none",
       }}
       onMouseUp={() => setIsDrawing(false)}
+      onTouchEnd={() => setIsDrawing(false)}
     >
       {/* Header */}
       <div style={{ marginBottom: 20, textAlign: "center" }}>
@@ -148,12 +189,18 @@ export default function HexTileMat() {
         boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
         overflow: "hidden",
         cursor: "crosshair",
+        width: "100%",
+        maxWidth: SVG_WIDTH,
+        touchAction: "none",
       }}>
         <svg
-          width={SVG_WIDTH}
-          height={SVG_HEIGHT}
+          width="100%"
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           style={{ display: "block" }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={() => setIsDrawing(false)}
+          ref={svgRef}
         >
           {/* Black background (the mat border/background) */}
           <rect x={0} y={0} width={SVG_WIDTH} height={SVG_HEIGHT} fill="#111" rx={8} />
@@ -178,11 +225,16 @@ export default function HexTileMat() {
         marginTop: 20,
         display: "flex",
         alignItems: "center",
-        gap: 14,
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: 10,
         background: "#2a2a2a",
         borderRadius: 10,
         padding: "12px 18px",
         boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+        width: "100%",
+        maxWidth: SVG_WIDTH,
+        boxSizing: "border-box",
       }}>
         {/* Color picker */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -223,7 +275,7 @@ export default function HexTileMat() {
         <div style={{ width: 1, height: 28, background: "#444" }} />
 
         {/* Preset swatches */}
-        <div style={{ display: "flex", gap: 5 }}>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "center" }}>
           {PRESET_COLORS.map(({ hex, name }) => {
             const count = colorCounts[hex] || 0;
             const isHovered = hoveredColor === hex;
